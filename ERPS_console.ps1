@@ -209,8 +209,8 @@ while ($true) {
 		Receive-Request($request)	
 	}
     if ($request.Url -match '/erps$' -and ($request.HttpMethod -eq "GET")) {  
-		$c = "PS-HTTP"
-		if($request.IsSecureConnection) {$c = "PS-HTTPS"}
+		$c = "ERPS-INSECURE"
+		if($request.IsSecureConnection) {$c = "ERPS-SECURE"}
         $response.ContentType = 'text/plain'
         $message = Read-Host "$c $hostip>"		
     }
